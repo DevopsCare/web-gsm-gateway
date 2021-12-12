@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Web GSM gateway
+
+Globals:
+  Function:
+    Timeout: 10
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Domain:
+        CertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/create-and-put-arn-here"
+        DomainName: my.example.com
+      StageName: "$default"
+      DefaultRouteSettings:
+        ThrottlingRateLimit: 0.1
+        ThrottlingBurstLimit: 1
+      FailOnWarnings: true
+
+  OpenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: open_barrier/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Policies:
+        - AWSLambdaExecute # Managed Policy
+        - Version: '2012-10-17' # Policy Document
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt DynamoDBTable.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref DynamoDBTable
+          TWILIO_ACCOUNT_SID: AAAAAAAABBBBBBBBB
+          TWILIO_AUTH_TOKEN: xxxxxxxxxxxyyyyyyyyyyyyyyyyyyyy
+          BARRIER_GSM_NUMBER: +555123456768
+          TELEGRAM_BOT_CREDENTIALS: 123456789:xxxxxxxxxxxxyyyyyyyyyyyyyy
+      Events:
+        Open:
+          Type: HttpApi
+          Properties:
+            Path: /open
+            Method: get
+            ApiId: !Ref HttpApi
+        OpenNamed:
+          Type: HttpApi
+          Properties:
+            Path: /open/{name}
+            Method: get
+            ApiId: !Ref HttpApi
+
+  DynamoDBTable:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - KeyType: HASH
+          AttributeName: id
